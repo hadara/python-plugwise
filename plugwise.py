@@ -108,6 +108,25 @@ class BaseType(object):
     def __len__(self):
         return self.length
 
+class CompositeType(object):
+    def __init__(self):
+        self.contents = []
+
+    def serialize(self):
+        return ''.join(a.serialize() for a in self.contents)
+
+    def unserialize(self, val):
+        for p in self.contents:
+            myval = val[:len(p)]
+            print "parse:",myval
+            p.unserialize(myval)
+            print "newval:",p.value
+            val = val[len(myval):]
+        return val
+        
+    def __len__(self):
+        return sum(len(x) for x in self.contents)
+
 class String(BaseType):
     pass
 
@@ -130,6 +149,30 @@ class UnixTimestamp(Int):
     def unserialize(self, val):
         Int.unserialize(self, val)
         self.value = datetime.datetime.fromtimestamp(self.value)
+
+class Year2k(Int):
+    """year value that is offset from the year 2000"""
+
+    def unserialize(self, val):
+        Int.unserialize(self, val)
+        self.value += 2000
+
+class DateTime(CompositeType):
+    def __init__(self):
+        CompositeType.__init__(self)        
+        self.year = Year2k(0, length=2)
+        self.month = Int(0, length=2)
+        self.minutes = Int(0, length=4)
+        self.contents += [self.year, self.month, self.minutes]
+
+    def unserialize(self, val):
+        CompositeType.unserialize(self, val)
+        minutes = self.minutes.value
+        hours = minutes // 60
+        days = hours // 24
+        hours -= (days*24)
+        minutes -= (days*24*60)+(hours*60)
+        self.value = datetime.datetime(self.year.value, self.month.value, days, hours, minutes)
 
 class Float(BaseType):
     def __init__(self, value, length=4):
@@ -236,9 +279,7 @@ class PlugwiseInfoResponse(PlugwiseResponse):
     
     def __init__(self):
         PlugwiseResponse.__init__(self)
-        self.year = Int(0, length=2)
-        self.month = Int(0, length=2)
-        self.minutes = Int(0, length=4)
+        self.datetime = DateTime()
         self.last_logaddr = LogAddr(0, length=8)
         self.relay_state = Int(0, length=2)
         self.hz = Int(0, length=2)
@@ -246,7 +287,8 @@ class PlugwiseInfoResponse(PlugwiseResponse):
         self.fw_ver = UnixTimestamp(0)
         self.unknown = Int(0, length=2)
         self.params += [
-            self.year, self.month, self.minutes, 
+            self.datetime,
+            #self.year, self.month, self.minutes, 
             self.last_logaddr, self.relay_state, 
             self.hz, self.hw_ver, self.fw_ver, self.unknown
         ]
