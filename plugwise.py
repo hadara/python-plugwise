@@ -1,6 +1,6 @@
 #!/bin/env python
 
-# Copyright Sven Petai <hadara@bsd.ee> 2011
+# Copyright (C) 2011 Sven Petai <hadara@bsd.ee> 
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -49,7 +49,8 @@ Slightly more complex example with a different port:
 # TODO:
 #   - implement stick init
 #   - implement reading from the buffer
-#   - make com chan. safe
+#   - implement schedule upload
+#   - make com chan. concurrency safe
 
 import sys
 import time
@@ -158,11 +159,16 @@ class Year2k(Int):
         self.value += 2000
 
 class DateTime(CompositeType):
+    """datetime value as used in the general info response
+    format is: YYMMmmmm
+    where year is offset value from the epoch which is Y2K
+    """
+
     def __init__(self):
         CompositeType.__init__(self)        
-        self.year = Year2k(0, length=2)
-        self.month = Int(0, length=2)
-        self.minutes = Int(0, length=4)
+        self.year = Year2k(0, 2)
+        self.month = Int(0, 2)
+        self.minutes = Int(0, 4)
         self.contents += [self.year, self.month, self.minutes]
 
     def unserialize(self, val):
@@ -173,6 +179,21 @@ class DateTime(CompositeType):
         hours -= (days*24)
         minutes -= (days*24*60)+(hours*60)
         self.value = datetime.datetime(self.year.value, self.month.value, days, hours, minutes)
+
+class Time(CompositeType):
+    """time value as used in the clock info response"""
+
+    def __init__(self):
+        CompositeType.__init__(self)
+        self.hour = Int(0, 2)
+        self.minute = Int(0, 2)
+        self.second = Int(0, 2)
+        self.contents += [self.hour, self.minute, self.second]
+
+    def unserialize(self, val):
+        CompositeType.unserialize(self, val)
+        self.value = datetime.time(self.hour.value, self.minute.value, self.second.value)
+        
 
 class Float(BaseType):
     def __init__(self, value, length=4):
@@ -252,11 +273,22 @@ class PlugwiseCalibrationResponse(PlugwiseResponse):
 
     def __init__(self):
         PlugwiseResponse.__init__(self)
-        self.gain_a = Float(0, length=8)
-        self.gain_b = Float(0, length=8)
-        self.off_tot = Float(0, length=8)
-        self.off_ruis = Float(0, length=8)
+        self.gain_a = Float(0, 8)
+        self.gain_b = Float(0, 8)
+        self.off_tot = Float(0, 8)
+        self.off_ruis = Float(0, 8)
         self.params += [self.gain_a, self.gain_b, self.off_tot, self.off_ruis]
+
+class PlugwiseClockInfoResponse(PlugwiseResponse):
+    ID = '003F'
+
+    def __init__(self):
+        PlugwiseResponse.__init__(self)
+        self.time = Time()
+        self.day_of_week = Int(0, 2)
+        self.unknown = Int(0, 2)
+        self.unknown2 = Int(0, 4)
+        self.params += [self.time, self.day_of_week, self.unknown, self.unknown2]
 
 class PlugwisePowerUsageResponse(PlugwiseResponse):
     """returns power usage as impulse counters for several different timeframes
@@ -265,13 +297,13 @@ class PlugwisePowerUsageResponse(PlugwiseResponse):
 
     def __init__(self):
         PlugwiseResponse.__init__(self)
-        self.pulse_1s = Int(0, length=4)
-        self.pulse_8s = Int(0, length=4)
+        self.pulse_1s = Int(0, 4)
+        self.pulse_8s = Int(0, 4)
         # XXX: is it really total or just some longer period, for example hour?
-        self.pulse_total = Int(0, length=8)
-        self.unknown1 = Int(0, length=4)
-        self.unknown2 = Int(0, length=4)
-        self.unknown3 = Int(0, length=4)
+        self.pulse_total = Int(0, 8)
+        self.unknown1 = Int(0, 4)
+        self.unknown2 = Int(0, 4)
+        self.unknown3 = Int(0, 4)
         self.params += [self.pulse_1s, self.pulse_8s, self.pulse_total, self.unknown1, self.unknown2, self.unknown3]
 
 class PlugwiseInfoResponse(PlugwiseResponse):
@@ -304,6 +336,9 @@ class PlugwisePowerUsageRequest(PlugwiseRequest):
 
 class PlugwiseInfoRequest(PlugwiseRequest):
     ID = '0023'
+
+class PlugwiseClockInfoRequest(PlugwiseRequest):
+    ID = '003E'
 
 class PlugwiseSwitchRequest(PlugwiseRequest):
     """switches Plug or or off"""
@@ -410,6 +445,18 @@ class Circle(object):
         req = PlugwiseSwitchRequest(self.mac, on)
         return self._send_msg(req.serialize())
 
+    def get_clock(self):
+        """fetch current time from the device"""
+        msg= PlugwiseClockInfoRequest(self.mac).serialize()
+        self._send_msg(msg)
+        resp = self._expect_response(PlugwiseClockInfoResponse)
+        print resp
+
+    def set_clock(self, dt):
+        """set clock to the value indicated by the datetime object dt
+        """
+        pass
+
     def switch_on(self):
         self.switch(True)
 
@@ -426,3 +473,4 @@ if __name__ == '__main__':
     #pw_dev.calibrate()
     print pw_dev.get_power_usage()
     print pw_dev.get_info()
+    print pw_dev.get_clock()
