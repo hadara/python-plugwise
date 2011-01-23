@@ -31,7 +31,7 @@ and several other sources.
 Sipmle usage example:
 
    >>> from plugwise import Circle
-   >>> c = Circle(<some mac>)
+   >>> c = Circle(mac)
    >>> c.switch_off()
    >>> c.switch_on()
    >>> print c.power_usage()
@@ -40,7 +40,7 @@ Slightly more complex example with a different port:
 
    >>> from plugwise import Stick
    >>> s = Stick(port="/dev/ttyUSB1")
-   >>> c1, c2 = Circle(<mac1>, s), Circle(<mac2>, s)
+   >>> c1, c2 = Circle(mac1, s), Circle(mac2, s)
    >>> c1.switch_on()
    >>> print c2.power_usage()
 
@@ -52,7 +52,14 @@ Slightly more complex example with a different port:
 #   - make circle-port combo singleton
 #   - return more reasonable responses than response message objects from the functions that don't do so yet
 #   - make message construction syntax better. Fields should only be specified once and contain name so we can serialize response message to dict
-#   - implement switching schedule upload
+#   - verify response checksums
+#   - look at the ACK messages
+#   - implement CRC calculation locally so we can get rid of the CRCmoose dependency
+#   - unit tests
+#   - python 3 support
+#   - pairing
+#   - switching schedule upload
+#   - support for older firmware versions
 
 import sys
 import time
@@ -60,6 +67,11 @@ import serial
 import struct
 import datetime
 import binascii
+
+DEBUG_PROTOCOL = False
+
+# plugwise year information is offset from y2k
+PLUGWISE_EPOCH = 2000
 
 class PlugwiseException(Exception):
     pass
@@ -70,8 +82,18 @@ class ProtocolError(PlugwiseException):
 class TimeoutException(PlugwiseException):
     pass
 
+# helpers
 def hexstr(s):
     return ' '.join(hex(ord(x)) for x in s)
+
+def debug(msg):
+    if __debug__ and DEBUG_PROTOCOL:
+        print(msg)
+
+def error(msg):
+    # XXX: we currently have far to many false "protocol errors"  since we don't look for ACKs etc.
+    # so just ignore these for now unless the debug is set
+    return debug(msg)
 
 # FIXME: rename args to same names as the underlying serial interface
 class SerialComChannel(object):
@@ -105,6 +127,9 @@ class BaseType(object):
         self.value = value
         self.length = length
 
+    def serialize(self):
+        return self.value
+
     def unserialize(self, val):
         self.value = val
 
@@ -121,11 +146,9 @@ class CompositeType(object):
     def unserialize(self, val):
         for p in self.contents:
             myval = val[:len(p)]
-            if __debug__:
-                print "parse:",myval
+            debug("parse:"+str(myval))
             p.unserialize(myval)
-            if __debug__:
-                print "newval:",p.value
+            debug("newval:"+str(p.value))
             val = val[len(myval):]
         return val
         
@@ -141,7 +164,7 @@ class Int(BaseType):
         self.length = length
 
     def serialize(self):
-        fmt = "%%0%dd" % self.length
+        fmt = "%%0%dX" % self.length
         return fmt % self.value
 
     def unserialize(self, val):
@@ -160,7 +183,7 @@ class Year2k(Int):
 
     def unserialize(self, val):
         Int.unserialize(self, val)
-        self.value += 2000
+        self.value += PLUGWISE_EPOCH
 
 class DateTime(CompositeType):
     """datetime value as used in the general info response
@@ -168,11 +191,11 @@ class DateTime(CompositeType):
     where year is offset value from the epoch which is Y2K
     """
 
-    def __init__(self):
+    def __init__(self, year=0, month=0, minutes=0):
         CompositeType.__init__(self)        
-        self.year = Year2k(0, 2)
-        self.month = Int(0, 2)
-        self.minutes = Int(0, 4)
+        self.year = Year2k(year-PLUGWISE_EPOCH, 2)
+        self.month = Int(month, 2)
+        self.minutes = Int(minutes, 4)
         self.contents += [self.year, self.month, self.minutes]
 
     def unserialize(self, val):
@@ -187,11 +210,11 @@ class DateTime(CompositeType):
 class Time(CompositeType):
     """time value as used in the clock info response"""
 
-    def __init__(self):
+    def __init__(self, hour=0, minute=0, second=0):
         CompositeType.__init__(self)
-        self.hour = Int(0, 2)
-        self.minute = Int(0, 2)
-        self.second = Int(0, 2)
+        self.hour = Int(hour, 2)
+        self.minute = Int(minute, 2)
+        self.second = Int(second, 2)
         self.contents += [self.hour, self.minute, self.second]
 
     def unserialize(self, val):
@@ -244,8 +267,7 @@ class PlugwiseResponse(PlugwiseMessage):
             raise ProtocolError, "message doesn't have expected length. expected %d bytes got %d" % (len(self), len(response))
 
         header, function_code, command_counter, mac = struct.unpack("4s4s4s16s", response[:28])
-        if __debug__:
-            print repr(header),repr(function_code),repr(command_counter),repr(mac)
+        debug(repr(header)+" "+repr(function_code)+" "+repr(command_counter)+" "+repr(mac))
 
         # FIXME: check function code match
 
@@ -263,11 +285,9 @@ class PlugwiseResponse(PlugwiseMessage):
     def _parse_params(self, response):
         for p in self.params:
             myval = response[:len(p)]
-            if __debug__:
-                print "parse:",myval
+            debug("parse:"+str(myval))
             p.unserialize(myval)
-            if __debug__:
-                print "newval:",p.value
+            debug("newval:"+str(p.value))
             response = response[len(myval):]
         return response
 
@@ -373,6 +393,18 @@ class PlugwiseInfoRequest(PlugwiseRequest):
 class PlugwiseClockInfoRequest(PlugwiseRequest):
     ID = '003E'
 
+class PlugwiseClockSetRequest(PlugwiseRequest):
+    ID = '0016'
+
+    def __init__(self, mac, dt):
+        PlugwiseRequest.__init__(self, mac)
+        month_minutes = ((dt.day-1)*24*60)+dt.minute
+        d = DateTime(dt.year, dt.month, month_minutes)
+        t = Time(dt.hour, dt.minute, dt.second)
+        day_of_week = Int(dt.weekday(), 2)
+        log_buf_addr = String('FFFFFFFF', 8)
+        self.args += [d, log_buf_addr, t, day_of_week]
+
 class PlugwiseSwitchRequest(PlugwiseRequest):
     """switches Plug or or off"""
     ID = '0017'
@@ -395,20 +427,17 @@ class Stick(SerialComChannel):
         msg = PlugwiseInitRequest().serialize()
         self.send_msg(msg)
         resp = self.expect_response(PlugwiseInitResponse)
-        print resp
+        debug(str(resp))
 
     def send_msg(self, cmd):
-        if __debug__:
-            print "_send_cmd:",repr(cmd)
+        debug("_send_cmd:"+repr(cmd))
         self.write(cmd)
 
     def _recv_response(self, response_obj):
         readlen = len(response_obj)
-        if __debug__:
-            print "expecting to read",readlen,"bytes for msg.",response_obj
+        debug("expecting to read "+str(readlen)+" bytes for msg. "+str(response_obj))
         msg = self.readline()
-        if __debug__:
-            print "read:",repr(msg),"with length",len(msg)
+        debug("read:"+repr(msg)+" with length "+str(len(msg)))
         response_obj.unserialize(msg)
         return response_obj
 
@@ -420,7 +449,7 @@ class Stick(SerialComChannel):
             try:
                 return self._recv_response(resp)
             except ProtocolError, reason:
-                print "encountered protocol error:",reason
+                error("encountered protocol error:"+str(reason))
 
 class Circle(object):
     """provides interface to the Plugwise Plug & Plug+ devices
@@ -469,9 +498,9 @@ class Circle(object):
         msg = PlugwisePowerUsageRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
         power_usage_response = self._comchan.expect_response(PlugwisePowerUsageResponse)
-        p8s = power_usage_response.pulse_1s.value
+        p1s = power_usage_response.pulse_1s.value
         # XXX: make sense of this eq & the magic 468.X
-        cp = 1.0 * (((((p8s + self.off_ruis)**2) * self.gain_b) + ((p8s + self.off_ruis) * self.gain_a)) + self.off_tot)
+        cp = 1.0 * (((((p1s + self.off_ruis)**2) * self.gain_b) + ((p1s + self.off_ruis) * self.gain_a)) + self.off_tot)
         return ((cp / 1) / 468.9385193) * 1000
 
     def get_info(self):
@@ -482,16 +511,9 @@ class Circle(object):
         resp = self._comchan.expect_response(PlugwiseInfoResponse)
         return resp
 
-    def switch(self, on):
-        """switch power on or off
-        @arg on: new state, boolean
-        """
-        req = PlugwiseSwitchRequest(self.mac, on)
-        return self._comchan.send_msg(req.serialize())
-
     def get_clock(self):
         """fetch current time from the device"""
-        msg= PlugwiseClockInfoRequest(self.mac).serialize()
+        msg = PlugwiseClockInfoRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
         resp = self._comchan.expect_response(PlugwiseClockInfoResponse)
         return resp.time.value
@@ -499,25 +521,19 @@ class Circle(object):
     def set_clock(self, dt):
         """set clock to the value indicated by the datetime object dt
         """
-        pass
+        msg = PlugwiseClockSetRequest(self.mac, dt).serialize()
+        self._comchan.send_msg(msg)
+        return dt
+
+    def switch(self, on):
+        """switch power on or off
+        @arg on: new state, boolean
+        """
+        req = PlugwiseSwitchRequest(self.mac, on)
+        return self._comchan.send_msg(req.serialize())
 
     def switch_on(self):
         self.switch(True)
 
     def switch_off(self):
         self.switch(False)
-
-if __name__ == '__main__':
-    mac = sys.argv[1]
-    #comchan = SerialComChannel()
-    pw_dev = Circle(mac)
-#    print "switching off"
-#    pw_dev.switch_off()
-#    time.sleep(5)
-#    print "switching on"
-#    pw_dev.switch_on()
-    print "calibrating"
-    pw_dev.calibrate()
-    print "power usage:",pw_dev.get_power_usage()
-    print pw_dev.get_info()
-    print "clock:",pw_dev.get_clock()
