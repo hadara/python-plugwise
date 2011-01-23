@@ -47,10 +47,12 @@ Slightly more complex example with a different port:
 """
 
 # TODO:
-#   - implement stick init
-#   - implement reading from the buffer
-#   - implement schedule upload
-#   - make com chan. concurrency safe
+#   - implement reading energy usage history from the buffer inside Circle
+#   - make communication channel concurrency safe
+#   - make circle-port combo singleton
+#   - return more reasonable responses than response message objects from the functions that don't do so yet
+#   - make message construction syntax better. Fields should only be specified once and contain name so we can serialize response message to dict
+#   - implement switching schedule upload
 
 import sys
 import time
@@ -119,9 +121,11 @@ class CompositeType(object):
     def unserialize(self, val):
         for p in self.contents:
             myval = val[:len(p)]
-            print "parse:",myval
+            if __debug__:
+                print "parse:",myval
             p.unserialize(myval)
-            print "newval:",p.value
+            if __debug__:
+                print "newval:",p.value
             val = val[len(myval):]
         return val
         
@@ -240,7 +244,8 @@ class PlugwiseResponse(PlugwiseMessage):
             raise ProtocolError, "message doesn't have expected length. expected %d bytes got %d" % (len(self), len(response))
 
         header, function_code, command_counter, mac = struct.unpack("4s4s4s16s", response[:28])
-        print repr(header),repr(function_code),repr(command_counter),repr(mac)
+        if __debug__:
+            print repr(header),repr(function_code),repr(command_counter),repr(mac)
 
         # FIXME: check function code match
 
@@ -258,9 +263,11 @@ class PlugwiseResponse(PlugwiseMessage):
     def _parse_params(self, response):
         for p in self.params:
             myval = response[:len(p)]
-            print "parse:",myval
+            if __debug__:
+                print "parse:",myval
             p.unserialize(myval)
-            print "newval:",p.value
+            if __debug__:
+                print "newval:",p.value
             response = response[len(myval):]
         return response
 
@@ -320,9 +327,26 @@ class PlugwiseInfoResponse(PlugwiseResponse):
         self.unknown = Int(0, length=2)
         self.params += [
             self.datetime,
-            #self.year, self.month, self.minutes, 
             self.last_logaddr, self.relay_state, 
             self.hz, self.hw_ver, self.fw_ver, self.unknown
+        ]
+
+class PlugwiseInitResponse(PlugwiseResponse):
+    ID = '0011'
+
+    def __init__(self):
+        PlugwiseResponse.__init__(self)
+        self.unknown = Int(0, length=2)
+        self.network_is_online = Int(0, length=2)
+        self.network_id = Int(0, length=16)
+        self.network_id_short = Int(0, length=4)
+        self.unknown = Int(0, length=2)
+        self.params += [
+            self.unknown,
+            self.network_is_online,
+            self.network_id,
+            self.network_id_short,
+            self.unknown,
         ]
 
 class PlugwiseRequest(PlugwiseMessage):
@@ -330,6 +354,15 @@ class PlugwiseRequest(PlugwiseMessage):
         PlugwiseMessage.__init__(self)
         self.args = []
         self.mac = mac
+
+class PlugwiseInitRequest(PlugwiseRequest):
+    """initialize Stick"""
+    ID = '000A'
+
+    def __init__(self):
+        """message for that initializes the Stick"""
+        # init is the only request message that doesn't send MAC address
+        PlugwiseRequest.__init__(self, '')
 
 class PlugwisePowerUsageRequest(PlugwiseRequest):
     ID = '0012'
@@ -353,7 +386,41 @@ class PlugwiseCalibrationRequest(PlugwiseRequest):
     ID = '0026'
 
 class Stick(SerialComChannel):
-    pass
+    def __init__(self, *args):
+        SerialComChannel.__init__(self, *args)
+        self.init()
+
+    def init(self):
+        """send init message to the stick"""
+        msg = PlugwiseInitRequest().serialize()
+        self.send_msg(msg)
+        resp = self.expect_response(PlugwiseInitResponse)
+        print resp
+
+    def send_msg(self, cmd):
+        if __debug__:
+            print "_send_cmd:",repr(cmd)
+        self.write(cmd)
+
+    def _recv_response(self, response_obj):
+        readlen = len(response_obj)
+        if __debug__:
+            print "expecting to read",readlen,"bytes for msg.",response_obj
+        msg = self.readline()
+        if __debug__:
+            print "read:",repr(msg),"with length",len(msg)
+        response_obj.unserialize(msg)
+        return response_obj
+
+    def expect_response(self, response_class):
+        resp = response_class()
+        # XXX: there's a lot of debug info flowing on the bus so it's
+        # expected that we constantly get unexpected messages
+        while 1:
+            try:
+                return self._recv_response(resp)
+            except ProtocolError, reason:
+                print "encountered protocol error:",reason
 
 class Circle(object):
     """provides interface to the Plugwise Plug & Plug+ devices
@@ -363,7 +430,7 @@ class Circle(object):
         self.mac = mac
 
         if comchan is None:
-            self._comchan = SerialComChannel()
+            self._comchan = Stick()
         else:
             self._comchan = comchan
 
@@ -379,35 +446,11 @@ class Circle(object):
         # FIXME: implement me
         self._timeout = timeout
 
-    # generic communication functions
-    def _send_msg(self, cmd):
-        print "_send_cmd:",repr(cmd)
-        self._comchan.write(cmd)
-
-    def _recv_response(self, response_obj):
-        readlen = len(response_obj)
-        print "expecting to read",readlen,"bytes for msg.",response_obj
-        msg = self._comchan.readline()
-        print "read:",repr(msg),"with length",len(msg)
-        response_obj.unserialize(msg)
-        return response_obj
-
-    def _expect_response(self, response_class):
-        resp = response_class()
-        # XXX: there's a lot of debug info flowing on the bus so it's
-        # expected that we constantly get unexpected messages
-        while 1:
-            try:
-                return self._recv_response(resp)
-            except ProtocolError, reason:
-                print "encountered protocol error:",reason
-    # /generic communication
-
     def calibrate(self):
         """fetch calibration info from the device"""
         msg = PlugwiseCalibrationRequest(self.mac).serialize()
-        self._send_msg(msg)
-        calibration_response = self._expect_response(PlugwiseCalibrationResponse)
+        self._comchan.send_msg(msg)
+        calibration_response = self._comchan.expect_response(PlugwiseCalibrationResponse)
         retl = []
 
         for x in ('gain_a', 'gain_b', 'off_ruis', 'off_tot'):
@@ -424,8 +467,8 @@ class Circle(object):
             self.calibrate()
 
         msg = PlugwisePowerUsageRequest(self.mac).serialize()
-        self._send_msg(msg)
-        power_usage_response = self._expect_response(PlugwisePowerUsageResponse)
+        self._comchan.send_msg(msg)
+        power_usage_response = self._comchan.expect_response(PlugwisePowerUsageResponse)
         p8s = power_usage_response.pulse_1s.value
         # XXX: make sense of this eq & the magic 468.X
         cp = 1.0 * (((((p8s + self.off_ruis)**2) * self.gain_b) + ((p8s + self.off_ruis) * self.gain_a)) + self.off_tot)
@@ -435,22 +478,23 @@ class Circle(object):
         """fetch state & logbuffer info
         """
         msg = PlugwiseInfoRequest(self.mac).serialize()
-        self._send_msg(msg)
-        resp = self._expect_response(PlugwiseInfoResponse)
+        self._comchan.send_msg(msg)
+        resp = self._comchan.expect_response(PlugwiseInfoResponse)
+        return resp
 
     def switch(self, on):
         """switch power on or off
         @arg on: new state, boolean
         """
         req = PlugwiseSwitchRequest(self.mac, on)
-        return self._send_msg(req.serialize())
+        return self._comchan.send_msg(req.serialize())
 
     def get_clock(self):
         """fetch current time from the device"""
         msg= PlugwiseClockInfoRequest(self.mac).serialize()
-        self._send_msg(msg)
-        resp = self._expect_response(PlugwiseClockInfoResponse)
-        print resp
+        self._comchan.send_msg(msg)
+        resp = self._comchan.expect_response(PlugwiseClockInfoResponse)
+        return resp.time.value
 
     def set_clock(self, dt):
         """set clock to the value indicated by the datetime object dt
@@ -467,10 +511,13 @@ if __name__ == '__main__':
     mac = sys.argv[1]
     #comchan = SerialComChannel()
     pw_dev = Circle(mac)
-    #pw_dev.switch_off()
-    #time.sleep(5)
-    #pw_dev.switch_on()
-    #pw_dev.calibrate()
-    print pw_dev.get_power_usage()
+#    print "switching off"
+#    pw_dev.switch_off()
+#    time.sleep(5)
+#    print "switching on"
+#    pw_dev.switch_on()
+    print "calibrating"
+    pw_dev.calibrate()
+    print "power usage:",pw_dev.get_power_usage()
     print pw_dev.get_info()
-    print pw_dev.get_clock()
+    print "clock:",pw_dev.get_clock()
