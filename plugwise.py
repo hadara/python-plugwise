@@ -59,6 +59,7 @@ Slightly more complex example with a different port:
 #   - python 3 support
 #   - pairing
 #   - switching schedule upload
+#   - implement timeouts
 #   - support for older firmware versions
 
 import sys
@@ -402,6 +403,7 @@ class PlugwiseClockSetRequest(PlugwiseRequest):
         d = DateTime(dt.year, dt.month, month_minutes)
         t = Time(dt.hour, dt.minute, dt.second)
         day_of_week = Int(dt.weekday(), 2)
+        # FIXME: use LogAddr instead
         log_buf_addr = String('FFFFFFFF', 8)
         self.args += [d, log_buf_addr, t, day_of_week]
 
@@ -456,6 +458,13 @@ class Circle(object):
     """
 
     def __init__(self, mac, comchan=None):
+        """
+        will raise ValueError if mac doesn't look valid
+        """
+        mac = mac.upper()
+        if self._validate_mac(mac) == False:
+            raise ValueError, "MAC address is in unexpected format: "+str(mac)
+
         self.mac = mac
 
         if comchan is None:
@@ -467,6 +476,17 @@ class Circle(object):
         self.gain_b = None
         self.off_ruis = None
         self.off_tot = None
+
+    def _validate_mac(self, mac):
+        if not re.match("^[A-F0-9]+$", mac):
+            return False
+
+        try:
+            _ = int(mac, 16)
+        except ValueError:
+            return False
+
+        return True
 
     def set_timeout(self, timeout):
         """sets timeout for commands in seconds
