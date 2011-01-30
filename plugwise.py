@@ -62,12 +62,17 @@ Slightly more complex example with a different port:
 #   - implement timeouts
 #   - support for older firmware versions
 
+import re
 import sys
 import time
 import serial
 import struct
 import datetime
 import binascii
+
+import crcmod
+
+crc_fun = crcmod.mkCrcFun(0x11021, rev=False, initCrc=0x0000, xorOut=0x0000)
 
 DEBUG_PROTOCOL = False
 
@@ -255,8 +260,7 @@ class PlugwiseMessage(object):
         return self.PACKET_HEADER+msg+checksum+self.PACKET_FOOTER
 
     def calculate_checksum(self, s):
-        crcval = crca.calcString(s)
-        return "%04X" % crca.calcString(s)
+        return "%04X" % crc_fun(s)
 
 class PlugwiseResponse(PlugwiseMessage):
     def __init__(self):
