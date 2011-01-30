@@ -1,3 +1,7 @@
+# Copyright (C) 2011 Sven Petai <hadara@bsd.ee> 
+# Use of this source code is governed by the MIT license found in the LICENSE file.
+
+
 import serial
 
 DEBUG_PROTOCOL = False
