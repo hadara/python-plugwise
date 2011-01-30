@@ -1,0 +1,14 @@
+This is a library and simple command line utility for communicating with Plugwise smartplugs.
+
+==== Install ====
+to install run the following command as a root:
+  python setup.py install
+
+==== Usage ====
+You can use plugwise_util to test some simple things for example, to get power usage from specific Circle use:
+plugwise_util -m <MAC ADDRESS> -p
+
+Use plugwise_util -h to get overview of the supported options.
+
+This script also serves as a example usage of the library functionality. 
+See plugwise modules docstrings for better documentation.
