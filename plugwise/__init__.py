@@ -8,10 +8,10 @@ and several other sources.
 Usage example:
 
    >>> from plugwise import Stick
-   >>> s = Stick(port="/dev/ttyUSB1")
+   >>> s = Stick(port="/dev/ttyUSB0")
    >>> c1, c2 = Circle(mac1, s), Circle(mac2, s)
    >>> c1.switch_on()
-   >>> print c2.power_usage()
+   >>> print c2.get_power_usage()
    >>> c1.switch_off()
 
 """

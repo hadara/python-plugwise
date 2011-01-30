@@ -44,13 +44,11 @@ from util import *
 from protocol import *
 from exceptions import *
 
-_active_ports = {}
-
 class Stick(SerialComChannel):
     """provides interface to the Plugwise Stick"""
 
-    def __init__(self, device='/dev/ttyUSB0'):
-        SerialComChannel.__init__(self, device)
+    def __init__(self, port=0):
+        SerialComChannel.__init__(self, port)
         self.init()
 
     def init(self):
