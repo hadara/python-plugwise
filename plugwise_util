@@ -6,6 +6,8 @@
 
 import optparse
 
+from serial.serialutil import SerialException
+
 from plugwise import *
 
 DEFAULT_SERIAL_PORT = "/dev/ttyUSB0"
@@ -27,18 +29,23 @@ if not options.mac:
     parser.print_help()
     sys.exit(-1)
 
-device = Stick(device)
-c = Circle(options.mac, device)
+try:
+    device = Stick(device)
+    c = Circle(options.mac, device)
+    
+    if options.switch:
+        sw_direction = options.switch.lower()
+        if sw_direction in ('on', '1'):
+            c.switch_on()
+        elif sw_direction in ('off', '1'):
+            c.switch_off()
+        else:
+            print("unknown switch direction: "+sw_direction)
+            sys.exit(-1)
+    
+    if options.power:
+        print("power usage: %.2fW" % (c.get_power_usage(),))
 
-if options.switch:
-    sw_direction = options.switch.lower()
-    if sw_direction in ('on', '1'):
-        c.switch_on()
-    elif sw_direction in ('off', '1'):
-        c.switch_off()
-    else:
-        print("unknown switch direction: "+sw_direction)
-        sys.exit(-1)
+except (TimeoutException, SerialException), reason:
+    print "Error: ", reason
 
-if options.power:
-    print("power usage: %.2fW" % (c.get_power_usage(),))

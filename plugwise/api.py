@@ -15,7 +15,6 @@
 #   - python 3 support
 #   - pairing
 #   - switching schedule upload
-#   - implement timeouts
 #   - support for older firmware versions
 
 import re
@@ -29,8 +28,8 @@ from exceptions import *
 class Stick(SerialComChannel):
     """provides interface to the Plugwise Stick"""
 
-    def __init__(self, port=0):
-        SerialComChannel.__init__(self, port)
+    def __init__(self, port=0, timeout=5):
+        SerialComChannel.__init__(self, port=port, timeout=timeout)
         self.init()
 
     def init(self):
@@ -48,6 +47,9 @@ class Stick(SerialComChannel):
         readlen = len(response_obj)
         debug("expecting to read "+str(readlen)+" bytes for msg. "+str(response_obj))
         msg = self.readline()
+        if msg == "":
+            raise TimeoutException, "Timeout while waiting for response from device"
+
         debug("read:"+repr(msg)+" with length "+str(len(msg)))
         response_obj.unserialize(msg)
         return response_obj
