@@ -28,7 +28,7 @@ class BaseType(object):
     def __len__(self):
         return self.length
 
-class CompositeType(object):
+class CompositeType(BaseType):
     def __init__(self):
         self.contents = []
 

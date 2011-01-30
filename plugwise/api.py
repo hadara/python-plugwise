@@ -39,38 +39,18 @@
 import re
 import sys
 import time
-import serial
 
+from util import *
 from protocol import *
 from exceptions import *
-from util import *
 
-# FIXME: rename args to same names as the underlying serial interface
-class SerialComChannel(object):
-    def __init__(self, device="/dev/ttyUSB0", baud=115200, bits=8, stop=1, parity='N'):
-        self.device = device
-        self.baud = baud
-        self.bits = bits
-        self.stop = stop
-        self.parity = parity
-        self._fd = serial.Serial(device, baudrate=baud, bytesize=bits, stopbits=stop, parity=parity)
-        self._fd.setTimeout(5)
-
-    def open(self):
-        self._fd = Serial(port=self.device, baudrate=self.baud, bytesize=self.bits, parity='N', stopbits=stop)
-
-    def read(self, bytecount):
-        return self._fd.read(bytecount)
-
-    def readline(self):
-        return self._fd.readline()
-
-    def write(self, data):
-        self._fd.write(data)
+_active_ports = {}
 
 class Stick(SerialComChannel):
-    def __init__(self, *args):
-        SerialComChannel.__init__(self, *args)
+    """provides interface to the Plugwise Stick"""
+
+    def __init__(self, device='/dev/ttyUSB0'):
+        SerialComChannel.__init__(self, device)
         self.init()
 
     def init(self):
@@ -106,7 +86,7 @@ class Circle(object):
     """provides interface to the Plugwise Plug & Plug+ devices
     """
 
-    def __init__(self, mac, comchan=None):
+    def __init__(self, mac, comchan):
         """
         will raise ValueError if mac doesn't look valid
         """
@@ -116,10 +96,7 @@ class Circle(object):
 
         self.mac = mac
 
-        if comchan is None:
-            self._comchan = Stick()
-        else:
-            self._comchan = comchan
+        self._comchan = comchan
 
         self.gain_a = None
         self.gain_b = None
@@ -178,7 +155,7 @@ class Circle(object):
         msg = PlugwiseInfoRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
         resp = self._comchan.expect_response(PlugwiseInfoResponse)
-        return resp
+        return response_to_dict(resp)
 
     def get_clock(self):
         """fetch current time from the device"""
@@ -206,3 +183,11 @@ class Circle(object):
 
     def switch_off(self):
         self.switch(False)
+
+def response_to_dict(r):
+    retd = {}
+    for key in dir(r):
+        ptr = getattr(r, key)
+        if isinstance(ptr, BaseType):
+            retd[key] = ptr.value
+    return retd

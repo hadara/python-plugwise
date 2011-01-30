@@ -5,21 +5,14 @@ There's no official documentation available about these things so this implement
 on partial reverse engineering by Maarten Damen (http://www.maartendamen.com/downloads/?did=5)
 and several other sources. 
 
-Sipmle usage example:
-
-   >>> from plugwise import Circle
-   >>> c = Circle(mac)
-   >>> c.switch_off()
-   >>> c.switch_on()
-   >>> print c.power_usage()
-
-Slightly more complex example with a different port:
+Usage example:
 
    >>> from plugwise import Stick
    >>> s = Stick(port="/dev/ttyUSB1")
    >>> c1, c2 = Circle(mac1, s), Circle(mac2, s)
    >>> c1.switch_on()
    >>> print c2.power_usage()
+   >>> c1.switch_off()
 
 """
 
