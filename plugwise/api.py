@@ -129,7 +129,10 @@ class Circle(object):
         p1s = power_usage_response.pulse_1s.value
         # XXX: make sense of this eq & the magic 468.X
         cp = 1.0 * (((((p1s + self.off_ruis)**2) * self.gain_b) + ((p1s + self.off_ruis) * self.gain_a)) + self.off_tot)
-        return ((cp / 1) / 468.9385193) * 1000
+        retval = ((cp / 1) / 468.9385193) * 1000
+        # sometimes it's slightly less than 0, probably caused by calibration/calculation errors
+        # it doesn't make much sense to return negative power usage in that case
+        return retval if retval > 0.0 else 0.0
 
     def get_info(self):
         """fetch state & logbuffer info
