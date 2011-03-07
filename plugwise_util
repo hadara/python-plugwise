@@ -17,6 +17,7 @@ parser.add_option("-m", "--mac", dest="mac", help="MAC address")
 parser.add_option("-d", "--device", dest="device", help="serial port device")
 parser.add_option("-p", "--power", action="store_true", help="get power usage")
 parser.add_option("-s", "--switch", dest="switch", help="switch power on/off")
+parser.add_option("-l", "--log", dest="log", help="read power usage history from the log buffers of the Circle")
 
 options, args = parser.parse_args()
 
@@ -35,6 +36,7 @@ try:
     
     if options.switch:
         sw_direction = options.switch.lower()
+
         if sw_direction in ('on', '1'):
             c.switch_on()
         elif sw_direction in ('off', '1'):
@@ -45,6 +47,8 @@ try:
     
     if options.power:
         print("power usage: %.2fW" % (c.get_power_usage(),))
+    if options.log:
+        print("power usage log:" % (c.historical_power_usage()))
 
 except (TimeoutException, SerialException), reason:
     print "Error: ", reason

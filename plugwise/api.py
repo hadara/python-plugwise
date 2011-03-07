@@ -169,6 +169,16 @@ class Circle(object):
     def switch_off(self):
         self.switch(False)
 
+    def historical_power_usage(self):
+        """read historical power usage from the log buffers of the Circle
+        """
+        info_resp = self.get_info()
+        last_logaddr = info_resp['last_logaddr']
+        log_req = PlugwisePowerBufferRequest(self.mac, last_logaddr)
+        self._comchan.send_msg(log_req)
+        resp = self._comchan.expect_response(PlugwisePowerBufferResponse)
+        return resp
+
 def response_to_dict(r):
     retd = {}
     for key in dir(r):
