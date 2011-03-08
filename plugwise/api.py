@@ -144,10 +144,18 @@ class Circle(object):
     def get_info(self):
         """fetch relay state & current logbuffer index info
         """
+        def map_hz(hz_raw):
+            if hz_raw == 133:
+                return 50
+            elif hz_raw == 197:
+                return 60
+
         msg = PlugwiseInfoRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
         resp = self._comchan.expect_response(PlugwiseInfoResponse)
-        return response_to_dict(resp)
+        retd = response_to_dict(resp)
+        retd['hz'] = map_hz(retd['hz'])
+        return retd
 
     def get_clock(self):
         """fetch current time from the device
