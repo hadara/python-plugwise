@@ -96,12 +96,15 @@ class Circle(object):
 
         return True
 
-    def set_timeout(self, timeout):
-        """sets timeout for commands in seconds
-        if we do not receive response from the device in this time TimeoutException will be rised
+    def pulses_to_watts(self, pulses, seconds):
+        """converts the pulse count to Watts
+        @param pulse: number of pulses
+        @param seconds: over how many seconds were the pulses counted
         """
-        # FIXME: implement me
-        self._timeout = timeout
+
+        pulses /= seconds
+        correction = 1.0 * (((((pulses + self.off_ruis)**2) * self.gain_b) + ((pulses + self.off_ruis) * self.gain_a)) + self.off_tot)
+        return ((correction / 1) / 468.9385193) * 1000
 
     def calibrate(self):
         """fetch calibration info from the device"""
@@ -118,7 +121,7 @@ class Circle(object):
         return retl
 
     def get_power_usage(self):
-        """returns power usage for the last 8 seconds in Watts
+        """returns power usage for the last second in Watts
         """
         if self.gain_a is None:
             self.calibrate()
@@ -126,10 +129,8 @@ class Circle(object):
         msg = PlugwisePowerUsageRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
         power_usage_response = self._comchan.expect_response(PlugwisePowerUsageResponse)
-        p1s = power_usage_response.pulse_1s.value
-        # XXX: make sense of this eq & the magic 468.X
-        cp = 1.0 * (((((p1s + self.off_ruis)**2) * self.gain_b) + ((p1s + self.off_ruis) * self.gain_a)) + self.off_tot)
-        retval = ((cp / 1) / 468.9385193) * 1000
+        pulses = power_usage_response.pulse_1s.value
+        retval = self.pulses_to_watts(pulses, 1)
         # sometimes it's slightly less than 0, probably caused by calibration/calculation errors
         # it doesn't make much sense to return negative power usage in that case
         return retval if retval > 0.0 else 0.0
@@ -158,7 +159,7 @@ class Circle(object):
 
     def switch(self, on):
         """switch power on or off
-        @arg on: new state, boolean
+        @param on: new state, boolean
         """
         req = PlugwiseSwitchRequest(self.mac, on)
         return self._comchan.send_msg(req.serialize())
@@ -169,15 +170,31 @@ class Circle(object):
     def switch_off(self):
         self.switch(False)
 
-    def historical_power_usage(self):
-        """read historical power usage from the log buffers of the Circle
+    def power_usage_history(self, log_buffer_index=None):
+        """Returns the power usage for 4 hours from the log buffer of the Circle.
+
+        @param log_buffer_index: index of the first log buffer to return.
+            If None then current log buffer index - 4 is used
+        @return: list of (datetime, power_usage_in_watts) tuples
         """
-        info_resp = self.get_info()
-        last_logaddr = info_resp['last_logaddr']
-        log_req = PlugwisePowerBufferRequest(self.mac, last_logaddr)
+
+        self.calibrate()
+
+        if log_buffer_index is None:
+            info_resp = self.get_info()
+            log_buffer_index = info_resp['last_logaddr']-4
+
+        log_req = PlugwisePowerBufferRequest(self.mac, log_buffer_index).serialize()
         self._comchan.send_msg(log_req)
         resp = self._comchan.expect_response(PlugwisePowerBufferResponse)
-        return resp
+        retl = []
+
+        for i in range(1, 5):
+            dt = getattr(resp, "logdate%d" % (i,)).value
+            watts = self.pulses_to_watts(getattr(resp, "pulses%d" % (i,)).value, 3600)
+            retl.append((dt, watts))
+
+        return retl
 
 def response_to_dict(r):
     retd = {}

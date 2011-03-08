@@ -130,8 +130,8 @@ class Float(BaseType):
 class LogAddr(Int):
     LOGADDR_OFFSET = 278528
 
-    def serialize(self, val):
-        return (self.value + self.LOGADDR_OFFSET) * 32
+    def serialize(self):
+        return "%08X" % ((self.value * 32) + self.LOGADDR_OFFSET)
 
     def unserialize(self, val):
         Int.unserialize(self, val)
@@ -240,14 +240,17 @@ class PlugwisePowerBufferResponse(PlugwiseResponse):
     def __init__(self):
         PlugwiseResponse.__init__(self)
         self.logdate1 = DateTime()
-        self.pulses1 = Int(0, 4)
+        self.pulses1 = Int(0, 8)
         self.logdate2 = DateTime()
-        self.pulses2 = Int(0, 4)
+        self.pulses2 = Int(0, 8)
         self.logdate3 = DateTime()
-        self.pulses3 = Int(0, 4)
+        self.pulses3 = Int(0, 8)
         self.logdate4 = DateTime()
-        self.pulses4 = Int(0, 4)
-        self.logaddr = LogAddr()
+        self.pulses4 = Int(0, 8)
+        self.logaddr = LogAddr(0, length=8)
+        self.params += [self.logdate1, self.pulses1, self.logdate2, self.pulses2,
+            self.logdate3, self.pulses3, self.logdate4, self.pulses4, self.logaddr
+        ]
 
 class PlugwiseInfoResponse(PlugwiseResponse):
     ID = '0024'
@@ -339,5 +342,5 @@ class PlugwisePowerBufferRequest(PlugwiseRequest):
 
     def __init__(self, mac, log_address):
         PlugwiseRequest.__init__(self, mac)
-        self.args.append(LogAddr(log_address))
+        self.args.append(LogAddr(log_address, 8))
 
