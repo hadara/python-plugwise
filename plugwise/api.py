@@ -123,14 +123,20 @@ class Circle(object):
 
         return retl
 
-    def get_power_usage(self):
-        """returns power usage for the last second in Watts
+    def get_pulse_counters(self):
+        """return pulse counters for 1s interval, 8s interval and since the reboot
+        as a tuple
         """
         msg = PlugwisePowerUsageRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
-        power_usage_response = self._comchan.expect_response(PlugwisePowerUsageResponse)
-        pulses = power_usage_response.pulse_1s.value
-        retval = self.pulses_to_watts(pulses, 1)
+        resp = self._comchan.expect_response(PlugwisePowerUsageResponse)
+        return (resp.pulse_1s.value, resp.pulse_1s.value, resp.pulse_total.value)
+
+    def get_power_usage(self):
+        """returns power usage for the last second in Watts
+        """
+        pulse_1s, _, _ = self.get_pulse_counters()
+        retval = self.pulses_to_watts(pulse_1s, 1)
         # sometimes it's slightly less than 0, probably caused by calibration/calculation errors
         # it doesn't make much sense to return negative power usage in that case
         return retval if retval > 0.0 else 0.0
