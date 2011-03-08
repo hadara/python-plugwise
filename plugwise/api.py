@@ -185,7 +185,7 @@ class Circle(object):
     def switch_off(self):
         self.switch(False)
 
-    def power_usage_history(self, log_buffer_index=None):
+    def get_power_usage_history(self, log_buffer_index=None):
         """Returns the power usage for 4 hours from the log buffer of the Circle.
 
         @param log_buffer_index: index of the first log buffer to return.

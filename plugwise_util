@@ -17,6 +17,7 @@ parser = optparse.OptionParser()
 parser.add_option("-m", "--mac", dest="mac", help="MAC address")
 parser.add_option("-d", "--device", dest="device", help="serial port device")
 parser.add_option("-p", "--power", action="store_true", help="get power usage")
+parser.add_option("-C", "--counter", action="store_true", help="print out values of the pulse counters")
 parser.add_option("-s", "--switch", dest="switch", help="switch power on/off")
 parser.add_option("-l", "--log", action="store_true", dest="log", help="read power usage history from the log buffers of the Circle")
 parser.add_option("-i", "--info", action="store_true", dest="info", help="perform the info request")
@@ -50,11 +51,13 @@ try:
     if options.power:
         print("power usage: %.2fW" % (c.get_power_usage(),))
     if options.log:
-        print("power usage log: %s" % (str(c.power_usage_history()),))
+        print("power usage log: %s" % (str(c.get_power_usage_history()),))
     if options.info:
         print("info:")
         pprint(c.get_info())
-        
+    if options.counter:
+        p1, p8, ptotal = c.get_pulse_counters()
+        print("%d %d %d" % (p1, p8, ptotal))
 
 except (TimeoutException, SerialException), reason:
     print "Error: ", reason
