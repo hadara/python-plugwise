@@ -101,13 +101,16 @@ class Circle(object):
         @param pulse: number of pulses
         @param seconds: over how many seconds were the pulses counted
         """
+        if self.gain_a is None:
+            self.calibrate()
 
         pulses /= seconds
         correction = 1.0 * (((((pulses + self.off_ruis)**2) * self.gain_b) + ((pulses + self.off_ruis) * self.gain_a)) + self.off_tot)
         return ((correction / 1) / 468.9385193) * 1000
 
     def calibrate(self):
-        """fetch calibration info from the device"""
+        """fetch calibration info from the device
+        """
         msg = PlugwiseCalibrationRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
         calibration_response = self._comchan.expect_response(PlugwiseCalibrationResponse)
@@ -123,9 +126,6 @@ class Circle(object):
     def get_power_usage(self):
         """returns power usage for the last second in Watts
         """
-        if self.gain_a is None:
-            self.calibrate()
-
         msg = PlugwisePowerUsageRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
         power_usage_response = self._comchan.expect_response(PlugwisePowerUsageResponse)
@@ -136,7 +136,7 @@ class Circle(object):
         return retval if retval > 0.0 else 0.0
 
     def get_info(self):
-        """fetch state & logbuffer info
+        """fetch relay state & current logbuffer index info
         """
         msg = PlugwiseInfoRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
@@ -144,7 +144,8 @@ class Circle(object):
         return response_to_dict(resp)
 
     def get_clock(self):
-        """fetch current time from the device"""
+        """fetch current time from the device
+        """
         msg = PlugwiseClockInfoRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
         resp = self._comchan.expect_response(PlugwiseClockInfoResponse)
@@ -177,9 +178,6 @@ class Circle(object):
             If None then current log buffer index - 4 is used
         @return: list of (datetime, power_usage_in_watts) tuples
         """
-
-        self.calibrate()
-
         if log_buffer_index is None:
             info_resp = self.get_info()
             log_buffer_index = info_resp['last_logaddr']-4
