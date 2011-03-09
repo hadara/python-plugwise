@@ -51,7 +51,10 @@ try:
     if options.power:
         print("power usage: %.2fW" % (c.get_power_usage(),))
     if options.log:
-        print("power usage log: %s" % (str(c.get_power_usage_history()),))
+        print("power usage log:")
+        for dt, watt_hours in c.get_power_usage_history():
+            print("\t%s %f Wh" % (dt.strftime("%Y-%m-%d %H") ,watt_hours))
+
     if options.info:
         print("info:")
         pprint(c.get_info())
