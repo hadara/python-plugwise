@@ -25,6 +25,8 @@ from util import *
 from protocol import *
 from exceptions import *
 
+PULSES_PER_KW_SECOND = 468.9385193
+
 class Stick(SerialComChannel):
     """provides interface to the Plugwise Stick"""
 
@@ -96,17 +98,27 @@ class Circle(object):
 
         return True
 
-    def pulses_to_watts(self, pulses, seconds):
-        """converts the pulse count to Watts
-        @param pulse: number of pulses
+    def pulse_correction(self, pulses, seconds=1):
+        """correct pulse count with Circle specific calibration offsets
+        @param pulses: pulse counter
         @param seconds: over how many seconds were the pulses counted
         """
+        if pulses == 0:
+            return 0.0
+
         if self.gain_a is None:
             self.calibrate()
 
-        pulses /= seconds
-        correction = 1.0 * (((((pulses + self.off_ruis)**2) * self.gain_b) + ((pulses + self.off_ruis) * self.gain_a)) + self.off_tot)
-        return ((correction / 1) / 468.9385193) * 1000
+        pulses /= float(seconds)
+        corrected_pulses = seconds * (((((pulses + self.off_ruis)**2) * self.gain_b) + ((pulses + self.off_ruis) * self.gain_a)) + self.off_tot)
+        return corrected_pulses
+
+    def pulses_to_kWs(self, pulses):
+        """converts the pulse count to kWs
+        """
+        # pulses -> kWs
+        kWs = pulses/PULSES_PER_KW_SECOND
+        return kWs
 
     def calibrate(self):
         """fetch calibration info from the device
@@ -136,7 +148,8 @@ class Circle(object):
         """returns power usage for the last second in Watts
         """
         pulse_1s, _, _ = self.get_pulse_counters()
-        retval = self.pulses_to_watts(pulse_1s, 1)
+        corrected_pulses = self.pulse_correction(pulse_1s)
+        retval = self.pulses_to_kWs(corrected_pulses)*1000
         # sometimes it's slightly less than 0, probably caused by calibration/calculation errors
         # it doesn't make much sense to return negative power usage in that case
         return retval if retval > 0.0 else 0.0
@@ -190,7 +203,7 @@ class Circle(object):
 
         @param log_buffer_index: index of the first log buffer to return.
             If None then current log buffer index - 4 is used
-        @return: list of (datetime, power_usage_in_watts) tuples
+        @return: list of (datetime, watt-hours-used-in-this-hour) tuples
         """
         if log_buffer_index is None:
             info_resp = self.get_info()
@@ -203,7 +216,8 @@ class Circle(object):
 
         for i in range(1, 5):
             dt = getattr(resp, "logdate%d" % (i,)).value
-            watts = self.pulses_to_watts(getattr(resp, "pulses%d" % (i,)).value, 3600)
+            corrected_pulses = self.pulse_correction(getattr(resp, "pulses%d" % (i,)).value, 3600)
+            watts = self.pulses_to_kWs(corrected_pulses)/3600*1000
             retl.append((dt, watts))
 
         return retl
