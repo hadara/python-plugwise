@@ -33,7 +33,7 @@ parser.add_option("-l", "--log", action="store_true", dest="log",
 parser.add_option("-i", "--info", action="store_true", dest="info", 
     help="Perform the info request")
 parser.add_option("-q", "--query", dest="query",
-    help="""Query data. Possible values are: time, pulses, logaddr""")
+    help="""Query data. Possible values are: time, pulses, last_logaddr, relay_state""")
 
 options, args = parser.parse_args()
 
@@ -52,11 +52,11 @@ def print_pulse_counters(c):
 
 def handle_query(c, query):
     if query == 'time':
-        print(c.get_clock().strftime("%Y-%m-%d %H-%M-%S"))
+        print(c.get_clock().strftime("%H:%M:%S"))
     elif query == 'pulses':
         print_pulse_counters(c)
-    elif query == 'logaddr':
-        c.get_info()['logaddr']
+    elif query in ('last_logaddr', 'relay_state'):
+        print(c.get_info()[query])
 
 def set_time(c, time_opt):
     if time_opt == 'sync':
@@ -99,12 +99,15 @@ try:
             print("info:")
             pprint(c.get_info())
         if options.counter:
-            print_pulse_counters()
+            print_pulse_counters(c)
+
+        if options.query:
+            handle_query(c, options.query)
 
         if options.continuous is None:
             break
         else:
-            time.sleep(options.continous)
+            time.sleep(options.continuous)
 
 except (TimeoutException, SerialException), reason:
     print "Error: ", reason

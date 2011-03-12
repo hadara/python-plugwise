@@ -85,6 +85,7 @@ class DateTime(CompositeType):
     """datetime value as used in the general info response
     format is: YYMMmmmm
     where year is offset value from the epoch which is Y2K
+    and last four bytes are offset from the beginning of the month in minutes
     """
 
     def __init__(self, year=0, month=0, minutes=0):
@@ -101,7 +102,7 @@ class DateTime(CompositeType):
         days = hours // 24
         hours -= (days*24)
         minutes -= (days*24*60)+(hours*60)
-        self.value = datetime.datetime(self.year.value, self.month.value, days, hours, minutes)
+        self.value = datetime.datetime(self.year.value, self.month.value, days+1, hours, minutes)
 
 class Time(CompositeType):
     """time value as used in the clock info response"""
@@ -317,7 +318,8 @@ class PlugwiseClockSetRequest(PlugwiseRequest):
 
     def __init__(self, mac, dt):
         PlugwiseRequest.__init__(self, mac)
-        month_minutes = ((dt.day-1)*24*60)+dt.minute
+        passed_days = dt.day - 1
+        month_minutes = (passed_days*24*60)+(dt.hour*60)+dt.minute
         d = DateTime(dt.year, dt.month, month_minutes)
         t = Time(dt.hour, dt.minute, dt.second)
         day_of_week = Int(dt.weekday(), 2)
