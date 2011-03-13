@@ -10,6 +10,7 @@ import optparse
 from serial.serialutil import SerialException
 
 from plugwise import *
+import plugwise.util
 
 DEFAULT_SERIAL_PORT = "/dev/ttyUSB0"
 
@@ -34,6 +35,9 @@ parser.add_option("-i", "--info", action="store_true", dest="info",
     help="Perform the info request")
 parser.add_option("-q", "--query", dest="query",
     help="""Query data. Possible values are: time, pulses, last_logaddr, relay_state""")
+parser.add_option("-v", "--verbose", dest="verbose",
+    help="""Verbose mode. Argument should be a number represeting verboseness. 
+    Currently all the debug is logged at the same level so it doesn't really matter which numbre you use.""")
 
 options, args = parser.parse_args()
 
@@ -46,6 +50,9 @@ if not options.mac:
     print("you have to specify mac with -m")
     parser.print_help()
     sys.exit(-1)
+
+if options.verbose:
+    plugwise.util.DEBUG_PROTOCOL = True
 
 def print_pulse_counters(c):
     print("%d %d %d" % c.get_pulse_counters())
