@@ -6,13 +6,11 @@
 # TODO:
 #   - implement reading energy usage history from the buffer inside Circle
 #   - make communication channel concurrency safe
-#   - make circle-port combo singleton
 #   - return more reasonable responses than response message objects from the functions that don't do so yet
 #   - make message construction syntax better. Fields should only be specified once and contain name so we can serialize response message to dict
 #   - verify response checksums
 #   - look at the ACK messages
 #   - unit tests
-#   - python 3 support
 #   - pairing
 #   - switching schedule upload
 #   - support for older firmware versions
@@ -21,9 +19,9 @@ import re
 import sys
 import time
 
-from util import *
-from protocol import *
-from exceptions import *
+from .util import *
+from .protocol import *
+from .exceptions import *
 
 PULSES_PER_KW_SECOND = 468.9385193
 
@@ -50,7 +48,7 @@ class Stick(SerialComChannel):
         debug("expecting to read "+str(readlen)+" bytes for msg. "+str(response_obj))
         msg = self.readline()
         if msg == "":
-            raise TimeoutException, "Timeout while waiting for response from device"
+            raise TimeoutException("Timeout while waiting for response from device")
 
         debug("read:"+repr(msg)+" with length "+str(len(msg)))
         response_obj.unserialize(msg)
@@ -63,7 +61,7 @@ class Stick(SerialComChannel):
         while 1:
             try:
                 return self._recv_response(resp)
-            except ProtocolError, reason:
+            except ProtocolError as reason:
                 error("encountered protocol error:"+str(reason))
 
 class Circle(object):
@@ -76,7 +74,7 @@ class Circle(object):
         """
         mac = mac.upper()
         if self._validate_mac(mac) == False:
-            raise ValueError, "MAC address is in unexpected format: "+str(mac)
+            raise ValueError("MAC address is in unexpected format: "+str(mac))
 
         self.mac = mac
 

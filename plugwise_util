@@ -64,7 +64,7 @@ def set_time(c, time_opt):
     else:
         try:
             set_ts = datetime.datetime.strptime(time_opt, "%Y-%m-%d %H:%M:%S")
-        except ValueError, reason:
+        except ValueError as reason:
             print("could not parse the time value. %s" % (str(reason),))
             sys.exit(-1)
 
@@ -109,6 +109,6 @@ try:
         else:
             time.sleep(options.continuous)
 
-except (TimeoutException, SerialException), reason:
-    print "Error: ", reason
+except (TimeoutException, SerialException) as reason:
+    print("Error:",reason)
 

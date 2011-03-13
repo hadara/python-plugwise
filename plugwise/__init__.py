@@ -16,4 +16,4 @@ Usage example:
 
 """
 
-from api import *
+from .api import *

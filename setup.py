@@ -1,7 +1,16 @@
 import os
+import sys
+
 from setuptools import setup, find_packages
 
 VERSION = '0.2'
+
+install_reqs = ['crcmod']
+
+if sys.version_info < (3, 0):
+    install_reqs.append('pyserial')
+else:
+    install_reqs.append('pyserial-py3k')
 
 setup(name='plugwiselib', 
     version=VERSION,
@@ -11,7 +20,7 @@ setup(name='plugwiselib',
     license='MIT',
     packages=find_packages(),
     py_modules=['plugwise'],
-    install_requires=['crcmod', 'pyserial'],
+    install_requires=install_reqs,
     scripts=['plugwise_util'],
 )
 

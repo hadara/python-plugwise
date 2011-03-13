@@ -6,8 +6,8 @@ import struct
 import binascii
 import datetime
 
-from exceptions import *
-from util import *
+from .exceptions import *
+from .util import *
 
 DEBUG_PROTOCOL = False
 
@@ -24,7 +24,7 @@ class BaseType(object):
         self.length = length
 
     def serialize(self):
-        return self.value
+        return bytes(self.value)
 
     def unserialize(self, val):
         self.value = val
@@ -136,25 +136,25 @@ class LogAddr(Int):
 
     def unserialize(self, val):
         Int.unserialize(self, val)
-        self.value = (self.value - self.LOGADDR_OFFSET) / 32
+        self.value = (self.value - self.LOGADDR_OFFSET) // 32
 
 # /base types
 
 class PlugwiseMessage(object):
-    PACKET_HEADER = '\x05\x05\x03\x03'
-    PACKET_FOOTER = '\x0d\x0a'
+    PACKET_HEADER = b'\x05\x05\x03\x03'
+    PACKET_FOOTER = b'\x0d\x0a'
     
     def serialize(self):
         """return message in a serialized format that can be sent out
         on wire
         """
         args = ''.join(a.serialize() for a in self.args)
-        msg = self.ID+self.mac+args
+        msg = self.ID+self.mac+sc(args)
         checksum = self.calculate_checksum(msg)
         return self.PACKET_HEADER+msg+checksum+self.PACKET_FOOTER
 
     def calculate_checksum(self, s):
-        return "%04X" % crc_fun(s)
+        return sc("%04X" % crc_fun(s))
 
 class PlugwiseResponse(PlugwiseMessage):
     def __init__(self):
@@ -163,7 +163,7 @@ class PlugwiseResponse(PlugwiseMessage):
 
     def unserialize(self, response):
         if len(response) != len(self):
-            raise ProtocolError, "message doesn't have expected length. expected %d bytes got %d" % (len(self), len(response))
+            raise ProtocolError("message doesn't have expected length. expected %d bytes got %d" % (len(self), len(response)))
 
         header, function_code, command_counter, mac = struct.unpack("4s4s4s16s", response[:28])
         debug(repr(header)+" "+repr(function_code)+" "+repr(command_counter)+" "+repr(mac))
@@ -171,7 +171,7 @@ class PlugwiseResponse(PlugwiseMessage):
         # FIXME: check function code match
 
         if header != self.PACKET_HEADER:
-            raise ProtocolError, "broken header!"
+            raise ProtocolError("broken header!")
 
         # FIXME: avoid magic numbers
         response = response[28:]
@@ -179,7 +179,7 @@ class PlugwiseResponse(PlugwiseMessage):
         crc = response[:4]
 
         if response[4:] != self.PACKET_FOOTER:
-            raise ProtocolError, "broken footer!"
+            raise ProtocolError("broken footer!")
 
     def _parse_params(self, response):
         for p in self.params:
@@ -195,7 +195,7 @@ class PlugwiseResponse(PlugwiseMessage):
         return 34 + arglen
 
 class PlugwiseCalibrationResponse(PlugwiseResponse):
-    ID = '0027'
+    ID = b'0027'
 
     def __init__(self):
         PlugwiseResponse.__init__(self)
@@ -206,7 +206,7 @@ class PlugwiseCalibrationResponse(PlugwiseResponse):
         self.params += [self.gain_a, self.gain_b, self.off_tot, self.off_ruis]
 
 class PlugwiseClockInfoResponse(PlugwiseResponse):
-    ID = '003F'
+    ID = b'003F'
 
     def __init__(self):
         PlugwiseResponse.__init__(self)
@@ -219,7 +219,7 @@ class PlugwiseClockInfoResponse(PlugwiseResponse):
 class PlugwisePowerUsageResponse(PlugwiseResponse):
     """returns power usage as impulse counters for several different timeframes
     """
-    ID = '0013'
+    ID = b'0013'
 
     def __init__(self):
         PlugwiseResponse.__init__(self)
@@ -236,7 +236,7 @@ class PlugwisePowerBufferResponse(PlugwiseResponse):
     """returns information about historical power usage
     each response contains 4 log buffers and each log buffer contains data for 1 hour
     """
-    ID = '0049'
+    ID = b'0049'
 
     def __init__(self):
         PlugwiseResponse.__init__(self)
@@ -254,7 +254,7 @@ class PlugwisePowerBufferResponse(PlugwiseResponse):
         ]
 
 class PlugwiseInfoResponse(PlugwiseResponse):
-    ID = '0024'
+    ID = b'0024'
     
     def __init__(self):
         PlugwiseResponse.__init__(self)
@@ -272,7 +272,7 @@ class PlugwiseInfoResponse(PlugwiseResponse):
         ]
 
 class PlugwiseInitResponse(PlugwiseResponse):
-    ID = '0011'
+    ID = b'0011'
 
     def __init__(self):
         PlugwiseResponse.__init__(self)
@@ -293,11 +293,11 @@ class PlugwiseRequest(PlugwiseMessage):
     def __init__(self, mac):
         PlugwiseMessage.__init__(self)
         self.args = []
-        self.mac = mac
+        self.mac = sc(mac)
 
 class PlugwiseInitRequest(PlugwiseRequest):
     """initialize Stick"""
-    ID = '000A'
+    ID = b'000A'
 
     def __init__(self):
         """message for that initializes the Stick"""
@@ -305,16 +305,16 @@ class PlugwiseInitRequest(PlugwiseRequest):
         PlugwiseRequest.__init__(self, '')
 
 class PlugwisePowerUsageRequest(PlugwiseRequest):
-    ID = '0012'
+    ID = b'0012'
 
 class PlugwiseInfoRequest(PlugwiseRequest):
-    ID = '0023'
+    ID = b'0023'
 
 class PlugwiseClockInfoRequest(PlugwiseRequest):
-    ID = '003E'
+    ID = b'003E'
 
 class PlugwiseClockSetRequest(PlugwiseRequest):
-    ID = '0016'
+    ID = b'0016'
 
     def __init__(self, mac, dt):
         PlugwiseRequest.__init__(self, mac)
@@ -329,7 +329,7 @@ class PlugwiseClockSetRequest(PlugwiseRequest):
 
 class PlugwiseSwitchRequest(PlugwiseRequest):
     """switches Plug or or off"""
-    ID = '0017'
+    ID = b'0017'
     
     def __init__(self, mac, on):
         PlugwiseRequest.__init__(self, mac)
@@ -337,10 +337,10 @@ class PlugwiseSwitchRequest(PlugwiseRequest):
         self.args.append(Int(val, length=2))
 
 class PlugwiseCalibrationRequest(PlugwiseRequest):
-    ID = '0026'
+    ID = b'0026'
 
 class PlugwisePowerBufferRequest(PlugwiseRequest):
-    ID = '0048'
+    ID = b'0048'
 
     def __init__(self, mac, log_address):
         PlugwiseRequest.__init__(self, mac)
