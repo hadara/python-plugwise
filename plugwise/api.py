@@ -47,7 +47,7 @@ class Stick(SerialComChannel):
         readlen = len(response_obj)
         debug("expecting to read "+str(readlen)+" bytes for msg. "+str(response_obj))
         msg = self.readline()
-        if msg == "":
+        if msg == b"":
             raise TimeoutException("Timeout while waiting for response from device")
 
         debug("read:"+repr(msg)+" with length "+str(len(msg)))
