@@ -24,7 +24,7 @@ class BaseType(object):
         self.length = length
 
     def serialize(self):
-        return bytes(self.value)
+        return sc(self.value)
 
     def unserialize(self, val):
         self.value = val
@@ -37,7 +37,7 @@ class CompositeType(BaseType):
         self.contents = []
 
     def serialize(self):
-        return ''.join(a.serialize() for a in self.contents)
+        return b''.join(a.serialize() for a in self.contents)
 
     def unserialize(self, val):
         for p in self.contents:
@@ -61,7 +61,7 @@ class Int(BaseType):
 
     def serialize(self):
         fmt = "%%0%dX" % self.length
-        return fmt % self.value
+        return sc(fmt % self.value)
 
     def unserialize(self, val):
         self.value = int(val, 16)
@@ -132,7 +132,7 @@ class LogAddr(Int):
     LOGADDR_OFFSET = 278528
 
     def serialize(self):
-        return "%08X" % ((self.value * 32) + self.LOGADDR_OFFSET)
+        return sc("%08X" % ((self.value * 32) + self.LOGADDR_OFFSET))
 
     def unserialize(self, val):
         Int.unserialize(self, val)
@@ -148,7 +148,7 @@ class PlugwiseMessage(object):
         """return message in a serialized format that can be sent out
         on wire
         """
-        args = ''.join(a.serialize() for a in self.args)
+        args = b''.join(a.serialize() for a in self.args)
         msg = self.ID+self.mac+sc(args)
         checksum = self.calculate_checksum(msg)
         return self.PACKET_HEADER+msg+checksum+self.PACKET_FOOTER

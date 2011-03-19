@@ -7,6 +7,9 @@ import serial
 DEBUG_PROTOCOL = False
 
 def _string_convert_py3(s):
+    if type(s) == type(b''):
+        return s
+
     return bytes(s, 'latin-1')
 
 def _string_convert_py2(s):
