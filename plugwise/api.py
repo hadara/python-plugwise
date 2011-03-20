@@ -206,15 +206,19 @@ class Circle(object):
         self.switch(False)
 
     def get_power_usage_history(self, log_buffer_index=None):
-        """Returns the power usage for 4 hours from the log buffer of the Circle.
+        """Reads power usage information from the given log buffer address at the Circle.
+        Each log buffer contains the power usage data for 4 hours, some of which might not be filled yet.
 
         @param log_buffer_index: index of the first log buffer to return.
-            If None then current log buffer index - 4 is used
-        @return: list of (datetime, watt-hours-used-in-this-hour) tuples
+            If None then current log buffer index is used
+        @return: list of (datetime | None, watt-hours-used-in-this-hour) tuples
+            If the first tuple element is None it means this buffer isn't written yet and the second value
+            is undefined in that case.
         """
+
         if log_buffer_index is None:
             info_resp = self.get_info()
-            log_buffer_index = info_resp['last_logaddr']-4
+            log_buffer_index = info_resp['last_logaddr']
 
         log_req = PlugwisePowerBufferRequest(self.mac, log_buffer_index).serialize()
         self._comchan.send_msg(log_req)

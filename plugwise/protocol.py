@@ -102,7 +102,11 @@ class DateTime(CompositeType):
         days = hours // 24
         hours -= (days*24)
         minutes -= (days*24*60)+(hours*60)
-        self.value = datetime.datetime(self.year.value, self.month.value, days+1, hours, minutes)
+        try:
+            self.value = datetime.datetime(self.year.value, self.month.value, days+1, hours, minutes)
+        except ValueError:
+            debug('encountered value error while attempting to construct datetime object')
+            self.value = None
 
 class Time(CompositeType):
     """time value as used in the clock info response"""
