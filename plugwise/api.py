@@ -25,10 +25,12 @@ from .exceptions import *
 
 PULSES_PER_KW_SECOND = 468.9385193
 
+DEFAULT_TIMEOUT = 10
+
 class Stick(SerialComChannel):
     """provides interface to the Plugwise Stick"""
 
-    def __init__(self, port=0, timeout=5):
+    def __init__(self, port=0, timeout=DEFAULT_TIMEOUT):
         SerialComChannel.__init__(self, port=port, timeout=timeout)
         self.init()
 
@@ -54,13 +56,17 @@ class Stick(SerialComChannel):
         response_obj.unserialize(msg)
         return response_obj
 
-    def expect_response(self, response_class):
+    def expect_response(self, response_class, src_mac=None):
         resp = response_class()
         # XXX: there's a lot of debug info flowing on the bus so it's
         # expected that we constantly get unexpected messages
         while 1:
             try:
-                return self._recv_response(resp)
+                retval = self._recv_response(resp)
+
+                if src_mac is None or src_mac == retval.mac:
+                    return retval
+
             except ProtocolError as reason:
                 error("encountered protocol error:"+str(reason))
 
@@ -76,7 +82,7 @@ class Circle(object):
         if self._validate_mac(mac) == False:
             raise ValueError("MAC address is in unexpected format: "+str(mac))
 
-        self.mac = mac
+        self.mac = sc(mac)
 
         self._comchan = comchan
 
@@ -95,6 +101,9 @@ class Circle(object):
             return False
 
         return True
+
+    def _expect_response(self, response_class):
+        return self._comchan.expect_response(response_class, self.mac)
 
     def pulse_correction(self, pulses, seconds=1):
         """correct pulse count with Circle specific calibration offsets
@@ -123,7 +132,7 @@ class Circle(object):
         """
         msg = PlugwiseCalibrationRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
-        calibration_response = self._comchan.expect_response(PlugwiseCalibrationResponse)
+        calibration_response = self._expect_response(PlugwiseCalibrationResponse)
         retl = []
 
         for x in ('gain_a', 'gain_b', 'off_ruis', 'off_tot'):
@@ -139,7 +148,7 @@ class Circle(object):
         """
         msg = PlugwisePowerUsageRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
-        resp = self._comchan.expect_response(PlugwisePowerUsageResponse)
+        resp = self._expect_response(PlugwisePowerUsageResponse)
         return (resp.pulse_1s.value, resp.pulse_1s.value, resp.pulse_total.value)
 
     def get_power_usage(self):
@@ -163,7 +172,7 @@ class Circle(object):
 
         msg = PlugwiseInfoRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
-        resp = self._comchan.expect_response(PlugwiseInfoResponse)
+        resp = self._expect_response(PlugwiseInfoResponse)
         retd = response_to_dict(resp)
         retd['hz'] = map_hz(retd['hz'])
         return retd
@@ -173,7 +182,7 @@ class Circle(object):
         """
         msg = PlugwiseClockInfoRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
-        resp = self._comchan.expect_response(PlugwiseClockInfoResponse)
+        resp = self._expect_response(PlugwiseClockInfoResponse)
         return resp.time.value
 
     def set_clock(self, dt):
@@ -209,7 +218,7 @@ class Circle(object):
 
         log_req = PlugwisePowerBufferRequest(self.mac, log_buffer_index).serialize()
         self._comchan.send_msg(log_req)
-        resp = self._comchan.expect_response(PlugwisePowerBufferResponse)
+        resp = self._expect_response(PlugwisePowerBufferResponse)
         retl = []
 
         for i in range(1, 5):

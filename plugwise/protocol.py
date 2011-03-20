@@ -161,12 +161,15 @@ class PlugwiseResponse(PlugwiseMessage):
         PlugwiseMessage.__init__(self)
         self.params = []
 
+        self.mac = None
+        self.command_counter = None
+
     def unserialize(self, response):
         if len(response) != len(self):
             raise ProtocolError("message doesn't have expected length. expected %d bytes got %d" % (len(self), len(response)))
 
-        header, function_code, command_counter, mac = struct.unpack("4s4s4s16s", response[:28])
-        debug(repr(header)+" "+repr(function_code)+" "+repr(command_counter)+" "+repr(mac))
+        header, function_code, self.command_counter, self.mac = struct.unpack("4s4s4s16s", response[:28])
+        debug(repr(header)+" "+repr(function_code)+" "+repr(self.command_counter)+" "+repr(self.mac))
 
         # FIXME: check function code match
 
