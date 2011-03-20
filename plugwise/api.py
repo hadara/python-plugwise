@@ -143,13 +143,13 @@ class Circle(object):
         return retl
 
     def get_pulse_counters(self):
-        """return pulse counters for 1s interval, 8s interval and since the reboot
+        """return pulse counters for 1s interval, 8s interval and for the current hour
         as a tuple
         """
         msg = PlugwisePowerUsageRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
         resp = self._expect_response(PlugwisePowerUsageResponse)
-        return (resp.pulse_1s.value, resp.pulse_1s.value, resp.pulse_total.value)
+        return (resp.pulse_1s.value, resp.pulse_1s.value, resp.pulse_hour.value)
 
     def get_power_usage(self):
         """returns power usage for the last second in Watts

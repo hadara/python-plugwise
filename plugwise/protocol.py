@@ -228,12 +228,11 @@ class PlugwisePowerUsageResponse(PlugwiseResponse):
         PlugwiseResponse.__init__(self)
         self.pulse_1s = Int(0, 4)
         self.pulse_8s = Int(0, 4)
-        # XXX: is it really total or just some longer period, for example hour?
-        self.pulse_total = Int(0, 8)
+        self.pulse_hour = Int(0, 8)
         self.unknown1 = Int(0, 4)
         self.unknown2 = Int(0, 4)
         self.unknown3 = Int(0, 4)
-        self.params += [self.pulse_1s, self.pulse_8s, self.pulse_total, self.unknown1, self.unknown2, self.unknown3]
+        self.params += [self.pulse_1s, self.pulse_8s, self.pulse_hour, self.unknown1, self.unknown2, self.unknown3]
 
 class PlugwisePowerBufferResponse(PlugwiseResponse):
     """returns information about historical power usage
