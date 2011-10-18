@@ -351,4 +351,3 @@ class PlugwisePowerBufferRequest(PlugwiseRequest):
     def __init__(self, mac, log_address):
         PlugwiseRequest.__init__(self, mac)
         self.args.append(LogAddr(log_address, 8))
-

@@ -145,5 +145,4 @@ try:
             time.sleep(options.continuous)
 
 except (TimeoutException, SerialException) as reason:
-    print("Error:",reason)
-
+    print("Error: %s" % (reason,))

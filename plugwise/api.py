@@ -53,6 +53,14 @@ class Stick(SerialComChannel):
             raise TimeoutException("Timeout while waiting for response from device")
 
         debug("read:"+repr(msg)+" with length "+str(len(msg)))
+
+        header_start = msg.find(PlugwiseMessage.PACKET_HEADER)
+        if header_start > 0:
+            # 2011 firmware seems to sometimes send extra \x83 byte before some of the
+            # response messages but there might a all kinds of chatter going on so just 
+            # look for our packet header
+            msg = msg[header_start:]
+
         response_obj.unserialize(msg)
         return response_obj
 
@@ -149,10 +157,21 @@ class Circle(object):
         msg = PlugwisePowerUsageRequest(self.mac).serialize()
         self._comchan.send_msg(msg)
         resp = self._expect_response(PlugwisePowerUsageResponse)
-        return (resp.pulse_1s.value, resp.pulse_1s.value, resp.pulse_hour.value)
+        p1s, p8s, p1h = resp.pulse_1s.value, resp.pulse_8s.value, resp.pulse_hour.value
+
+        # sometimes the circle returns max values for some of the pulse counters
+        # I have no idea what it means but it certainly isn't a reasonable value
+        # so I just assume that it's meant to signal some kind of a temporary error condition
+        if p1s == 65535 or p8s == 65535:
+            raise ValueError("Pulse counters seem to contain unreasonable values")
+        if p1h == 4294967295:
+            raise ValueError("1h pulse counter seems to contain an unreasonable value")
+
+        return (p1s, p8s, p1h)
 
     def get_power_usage(self):
         """returns power usage for the last second in Watts
+        might raise ValueError if reading the pulse counters fails
         """
         pulse_1s, _, _ = self.get_pulse_counters()
         corrected_pulses = self.pulse_correction(pulse_1s)
