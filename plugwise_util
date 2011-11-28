@@ -58,7 +58,10 @@ if options.verbose:
     plugwise.util.DEBUG_PROTOCOL = True
 
 def print_pulse_counters(c):
-    print("%d %d %d" % c.get_pulse_counters())
+    try:
+        print("%d %d %d" % c.get_pulse_counters())
+    except ValueError:
+        print("Error: Failed to read pulse counters")
 
 def handle_query(c, query):
     if query == 'time':
@@ -99,7 +102,7 @@ def set_time(c, time_opt):
         try:
             set_ts = datetime.datetime.strptime(time_opt, "%Y-%m-%d %H:%M:%S")
         except ValueError as reason:
-            print("could not parse the time value. %s" % (str(reason),))
+            print("Error: Could not parse the time value: %s" % (str(reason),))
             sys.exit(-1)
 
     c.set_clock(set_ts)
@@ -119,12 +122,15 @@ try:
         elif sw_direction in ('off', '0'):
             c.switch_off()
         else:
-            print("unknown switch direction: "+sw_direction)
+            print("Error: Unknown switch direction: "+sw_direction)
             sys.exit(-1)
     
     while 1:
         if options.power:
-            print("power usage: %.2fW" % (c.get_power_usage(),))
+            try:
+                print("power usage: %.2fW" % (c.get_power_usage(),))
+            except ValueError:
+                print("Error: Failed to read power usage")
 
         if options.log != None:
             handle_log(c, options.log)
